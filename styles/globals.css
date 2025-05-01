@@ -1,6 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* #F8EDE3
+#DFD3C3
+#D0B8A8
+#85586F */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #F8EDE3;
+  --foreground: #85586F;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -16,12 +25,11 @@ body {
   overflow-x: hidden;
 }
 
+
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  font-family: 'Segoe UI', 'Roboto', sans-serif;
 }
 
 * {
