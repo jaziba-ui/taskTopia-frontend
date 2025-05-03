@@ -1,4 +1,4 @@
-const floatingIcons = ["☕", "🍫"];
+const floatingIcons = ["☕", "🍫", "🫓"];
 
 const FloatingBackground = () => {
   return (
