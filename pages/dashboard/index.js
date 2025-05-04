@@ -4,10 +4,16 @@ import TaskForm from "../../components/TaskForm";
 import TaskList from "../../components/TaskList";
 import FloatingBackground from "@/components/FloatingBackground";
 import { useRouter } from "next/router";
-// import { URLSearchParams } from "next/dist/compiled/@edge-runtime/primitives/url";
+import io from "socket.io-client";
+import Navbar from "../../components/Navbar.js";
+
+const socket = io("http://localhost:5000", { transports: ["websocket"] });
 
 const Dashboard = () => {
+  const [showModal, setShowModal] = useState(false);
+  const [latestNotification, setLatestNotification] = useState(null);
   const router = useRouter();
+  const [notifications, setNotifications] = useState([]);
   const [tasks, setTasks] = useState({
     created: [],
     assigned: [],
@@ -20,37 +26,6 @@ const Dashboard = () => {
     priority: "",
   });
 
-  const applyFilters = async () => {
-    const query = new URLSearchParams();
-    Object.entries(filters).forEach(([key, val]) => {
-      if (val) query.append(key, val);
-    });
-  
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const headers = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    };
-  
-    try {
-      const [createdRes, assignedRes, overdueRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/tasks/created-tasks?${query}`, { headers }),
-        axios.get(`http://localhost:5000/api/tasks/assigned-tasks?${query}`, { headers }),
-        axios.get(`http://localhost:5000/api/tasks/overdue-tasks?${query}`, { headers }),
-      ]);
-  
-      setTasks({
-        created: createdRes.data.tasks || [],
-        assigned: assignedRes.data.tasks || [],
-        overdue: overdueRes.data.tasks || [],
-      });
-    } catch (error) {
-      console.error("Error applying filters:", error);
-    }
-  };
-  
-
-
   const EmptyTaskMessage = ({ message }) => (
     <div className="text-center p-6 border-4 border-dotted border-[#D0B8A8] bg-[#F8EDE3] rounded-xl shadow-sm my-4">
       {/* <div className="text-5xl mb-3">☕</div> */}
@@ -61,40 +36,126 @@ const Dashboard = () => {
     </div>
   );
 
-  const fetchTasks = async () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const fetchTasks = async (customFilters = filters) => {
+    const query = new URLSearchParams();
+    Object.entries(customFilters).forEach(([key, val]) => {
+      if (val) query.append(key, val);
+    });
+
+    const token =
+      typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     };
-  
+
     try {
       const [createdRes, assignedRes, overdueRes] = await Promise.all([
-        axios.get("http://localhost:5000/api/tasks/created-tasks", { headers }),
-        axios.get("http://localhost:5000/api/tasks/assigned-tasks", { headers }),
-        axios.get("http://localhost:5000/api/tasks/overdue-tasks", { headers }),
+        axios.get(`http://localhost:5000/api/tasks/created-tasks?${query}`, {
+          headers,
+        }),
+        axios.get(`http://localhost:5000/api/tasks/assigned-tasks?${query}`, {
+          headers,
+        }),
+        axios.get(`http://localhost:5000/api/tasks/overdue-tasks?${query}`, {
+          headers,
+        }),
       ]);
-  
-      console.log("Created Tasks:", createdRes.data.tasks);
-      console.log("Assigned Tasks:", assignedRes.data.tasks);
-      console.log("Overdue Tasks:", overdueRes.data.tasks);
+
+      console.log(
+        createdRes.data.tasks,
+        assignedRes.data.tasks,
+        overdueRes.data.tasks
+      );
       setTasks({
         created: createdRes.data.tasks || [],
         assigned: assignedRes.data.tasks || [],
         overdue: overdueRes.data.tasks || [],
       });
     } catch (error) {
-      console.error("Error fetching tasks:", error);
+      console.error("Error applying filters:", error);
     }
-  };  
+  };
+
+  const applyFilters = () => {
+    fetchTasks(filters);
+  };
 
   useEffect(() => {
-    fetchTasks();
+    const token = localStorage.getItem("token");
+    console.log("Socket ID on frontend:", socket.id);
+    const fetchNotifications = async () => {
+      try {
+        const res = await axios.get("http://localhost:5000/api/notifications", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setNotifications(res.data);
+      } catch (err) {
+        console.error("Error fetching notifications:", err);
+      }
+    };
+
+    const user = JSON.parse(localStorage.getItem("user"));
+    console.log("User ID:", user?.id);
+    console.log("User:", user);
+    if (user.id) {
+      socket.emit("register", user?.id);
+      // console.log("Assigned To:", assignedRes.data.tasks)
+
+      socket.on("new-notification", (data) => {
+        setNotifications((prev) => [data, ...prev]);
+        setLatestNotification(data);
+        setShowModal(true);
+
+        // Auto-close the modal and reload after 5 seconds
+        setTimeout(() => {
+          setShowModal(false); // Close the modal
+          window.location.reload(); // Reload the page
+        }, 5000);
+      });
+
+      socket.on("new-task", () => {
+        fetchTasks(); // ✅ Correct one from top
+      });
+    }
+    console.log("Socket ID on frontend2:", socket.id);
+
+    fetchTasks(); // ✅ Call correct version from top
+    fetchNotifications();
+
+    return () => {
+      socket.off("new-task");
+      socket.off("new-notification");
+      socket.disconnect();
+    };
   }, []);
+
+  const handleModalClose = () => {
+    setShowModal(false);
+    window.location.reload(); // Reload the page when modal is closed
+  };
 
   return (
     <div className="relative p-8 overflow-hidden min-h-screen bg-[#F8EDE3]">
+      {/* <Navbar notifications={notifications} /> */}
       <FloatingBackground />
+      {showModal && latestNotification && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm text-center">
+            <h3 className="text-lg font-bold text-[#85586F] mb-2">
+            🍫 New Notification
+            </h3>
+            <p className="text-sm text-gray-700">
+              {latestNotification.message}
+            </p>
+            <button
+              className="mt-4 px-4 py-2 bg-[#D0B8A8] text-white rounded-full hover:bg-[#C3B091]"
+              onClick={handleModalClose}>
+                Close
+            </button>
+          </div>
+        </div>
+      )}
       <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
       <TaskForm onSuccess={fetchTasks} />
 
@@ -109,7 +170,7 @@ const Dashboard = () => {
         <select
           value={filters.status}
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-           className="bg-[#F8EDE3] text-[#85586F] border border-[#D0B8A8] rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#D0B8A8] hover:border-[#C3B091] transition"
+          className="bg-[#F8EDE3] text-[#85586F] border border-[#D0B8A8] rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#D0B8A8] hover:border-[#C3B091] transition"
         >
           <option value="">Status</option>
           <option value="pending">Pending</option>
@@ -118,7 +179,7 @@ const Dashboard = () => {
         <select
           value={filters.priority}
           onChange={(e) => setFilters({ ...filters, priority: e.target.value })}
-           className="bg-[#F8EDE3] text-[#85586F] border border-[#D0B8A8] rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#D0B8A8] hover:border-[#C3B091] transition"
+          className="bg-[#F8EDE3] text-[#85586F] border border-[#D0B8A8] rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#D0B8A8] hover:border-[#C3B091] transition"
         >
           <option value="">Priority</option>
           <option value="Low">Low</option>
@@ -135,7 +196,7 @@ const Dashboard = () => {
 
       {/* Created by You Section */}
       <h2 className="text-xl mt-6">Created by You</h2>
-      {console.log(tasks.created)}
+      {/* {console.log(tasks.created)} */}
       {tasks.created.length > 0 ? (
         <TaskList tasks={tasks.created} onUpdate={fetchTasks} />
       ) : (
