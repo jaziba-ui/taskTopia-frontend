@@ -18,7 +18,7 @@ const withAuth = (Component, allowedRoles = []) => {
                         return;
                     }
 
-                    const res = await axios.get("http://localhost:5000/api/auth", {
+                    const res = await axios.get("http://localhost:8080/api/auth", {
                         headers: {
                             Authorization: `Bearer ${token}`
                         }
