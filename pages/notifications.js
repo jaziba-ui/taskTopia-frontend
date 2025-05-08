@@ -6,7 +6,7 @@ const NotificationsPage = () => {
 
       const markAsRead = async (id) => {
         try {
-          await axios.patch(`http://localhost:5000/api/notifications/${id}/read`);
+          await axios.patch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications/${id}/read`);
           setNotifications((prev) =>
             prev.map((n) => (n._id === id ? { ...n, read: true } : n))
           );
@@ -19,7 +19,7 @@ const NotificationsPage = () => {
         const fetchNotifications = async () => {
           const token = localStorage.getItem("token");
           try {
-            const res = await axios.get("http://localhost:5000/api/notifications", {
+            const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications`, {
               headers: { Authorization: `Bearer ${token}` }
             });
             setNotifications(res.data);

@@ -31,7 +31,7 @@ const TaskForm = ({ onSuccess }) => {
     console.log("Sending task data:", taskWithValidDate);
 
     try {
-      await axios.post("http://localhost:8080/api/tasks", taskWithValidDate, {
+      await axios.post(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, taskWithValidDate, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -48,7 +48,7 @@ const TaskForm = ({ onSuccess }) => {
       const token = localStorage.getItem("token");
 
       try {
-        const res = await axios.get("http://localhost:8080/api/users", {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/users`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         setUsers(res.data);

@@ -26,7 +26,7 @@ const AdminUsers = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await axios.get('http://localhost:8080/api/users', {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       console.log("Fetched Users:", res.data);
@@ -42,7 +42,7 @@ const AdminUsers = () => {
   const updateRole = async (id, role) => {
     try {
       await axios.put(
-        `http://localhost:8080/api/users/${id}/role`,
+        `${process.env.NEXT_PUBLIC_API_URL}/api/users/${id}/role`,
         { role },
         { headers: { Authorization: `Bearer ${token}` } }
       );

@@ -7,7 +7,7 @@ import { useRouter } from "next/router";
 import io from "socket.io-client";
 import Navbar from "../../components/Navbar.js";
 
-const socket = io("http://localhost:8080", { transports: ["websocket"] });
+const socket = io(`${process.env.NEXT_PUBLIC_API_URL}`, { transports: ["websocket"] });
 
 const Dashboard = () => {
   const [user, setUser] = useState(null);
@@ -62,11 +62,11 @@ const Dashboard = () => {
     if (user.role === "admin" || user.role === "manager") {
       console.log(
         "Created URL:",
-        `http://localhost:8080/api/tasks/created-tasks?${query}`
+        `${process.env.NEXT_PUBLIC_API_URL}/api/tasks/created-tasks?${query}`
       );
       console.log(
         "Assigned URL:",
-        `http://localhost:8080/api/tasks/assigned-tasks?${query}`
+        `${process.env.NEXT_PUBLIC_API_URL}api/tasks/assigned-tasks?${query}`
       );
       // console.log(
       //   "Overdue URL:",
@@ -75,10 +75,10 @@ const Dashboard = () => {
 
       try {
         const [createdRes, assignedRes, overdueRes] = await Promise.all([
-          axios.get(`http://localhost:8080/api/tasks/created-tasks?${query}`, {
+          axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/created-tasks?${query}`, {
             headers,
           }),
-          axios.get(`http://localhost:8080/api/tasks/assigned-tasks?${query}`, {
+          axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/assigned-tasks?${query}`, {
             headers,
           }),
           // axios.get(`http://localhost:5000/api/tasks/overdue-tasks?${query}`, {
@@ -101,7 +101,7 @@ const Dashboard = () => {
     if (user.role === "user") {
       try {
         const res = await axios.get(
-          `http://localhost:8080/api/tasks/assigned-tasks?${query}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/api/tasks/assigned-tasks?${query}`,
           { headers }
         );
         console.log("Assigned Tasks:", res.data.tasks);
@@ -119,7 +119,7 @@ const Dashboard = () => {
   const fetchNotifications = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:8080/api/notifications", {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setNotifications(res.data);
@@ -132,7 +132,7 @@ const Dashboard = () => {
     const fetchUser = async () => {
       try {
         const token = localStorage.getItem("token");
-        const res = await axios.get("http://localhost:8080/api/auth", {
+        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/api/auth`, {
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -149,7 +149,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user) return;
 
-    socketRef.current = io("http://localhost:5000", {
+    socketRef.current = io(`${process.env.NEXT_PUBLIC_API_URL}`, {
       transports: ["websocket"],
     });
 
