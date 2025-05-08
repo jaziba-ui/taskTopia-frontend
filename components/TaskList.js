@@ -31,6 +31,11 @@ const TaskList = ({ tasks = [], onUpdate }) => {
                     <p className="text-sm text-[#85586F]">
                         <strong>Status:</strong> {task.status}
                     </p>
+                    {task.assignedTo && (
+        <p className="text-sm text-[#85586F]">
+          <strong>Assigned To:</strong> {task.assignedTo.name}
+        </p>
+      )}
                     <button
                         onClick={() => handleDelete(task._id)}
                         className="mt-3 inline-block bg-[#DFD3C3] text-[#85586F] px-4 py-1 rounded-full text-sm hover:bg-[#D0B8A8] transition"

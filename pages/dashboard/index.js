@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import TaskForm from "../../components/TaskForm";
 import TaskList from "../../components/TaskList";
@@ -10,14 +10,16 @@ import Navbar from "../../components/Navbar.js";
 const socket = io("http://localhost:5000", { transports: ["websocket"] });
 
 const Dashboard = () => {
+  const [user, setUser] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [latestNotification, setLatestNotification] = useState(null);
   const router = useRouter();
+  const socketRef = useRef(null);
   const [notifications, setNotifications] = useState([]);
   const [tasks, setTasks] = useState({
     created: [],
     assigned: [],
-    overdue: [],
+    // overdue: [],
   });
 
   const [filters, setFilters] = useState({
@@ -37,6 +39,7 @@ const Dashboard = () => {
   );
 
   const fetchTasks = async (customFilters = filters) => {
+    console.log("Fetching tasks with filters:", customFilters); // Debugging line
     const query = new URLSearchParams();
     Object.entries(customFilters).forEach(([key, val]) => {
       if (val) query.append(key, val);
@@ -49,31 +52,63 @@ const Dashboard = () => {
       Authorization: `Bearer ${token}`,
     };
 
-    try {
-      const [createdRes, assignedRes, overdueRes] = await Promise.all([
-        axios.get(`http://localhost:5000/api/tasks/created-tasks?${query}`, {
-          headers,
-        }),
-        axios.get(`http://localhost:5000/api/tasks/assigned-tasks?${query}`, {
-          headers,
-        }),
-        axios.get(`http://localhost:5000/api/tasks/overdue-tasks?${query}`, {
-          headers,
-        }),
-      ]);
+    console.log(token,headers)
 
+    if (!user) {
+      console.warn("User not loaded yet, skipping task fetch.");
+      return;
+    }
+
+    if (user.role === "admin" || user.role === "manager") {
       console.log(
-        createdRes.data.tasks,
-        assignedRes.data.tasks,
-        overdueRes.data.tasks
+        "Created URL:",
+        `http://localhost:5000/api/tasks/created-tasks?${query}`
       );
-      setTasks({
-        created: createdRes.data.tasks || [],
-        assigned: assignedRes.data.tasks || [],
-        overdue: overdueRes.data.tasks || [],
-      });
-    } catch (error) {
-      console.error("Error applying filters:", error);
+      console.log(
+        "Assigned URL:",
+        `http://localhost:5000/api/tasks/assigned-tasks?${query}`
+      );
+      // console.log(
+      //   "Overdue URL:",
+      //   `http://localhost:5000/api/tasks/overdue-tasks?${query}`
+      // );
+
+      try {
+        const [createdRes, assignedRes, overdueRes] = await Promise.all([
+          axios.get(`http://localhost:5000/api/tasks/created-tasks?${query}`, {
+            headers,
+          }),
+          axios.get(`http://localhost:5000/api/tasks/assigned-tasks?${query}`, {
+            headers,
+          }),
+          // axios.get(`http://localhost:5000/api/tasks/overdue-tasks?${query}`, {
+          //   headers,
+          // }),
+        ]);
+        console.log("Created Tasks:", createdRes.data.tasks);
+        console.log("Assigned Tasks:", assignedRes.data.tasks);
+        // console.log("Overdue Tasks:", overdueRes.data.tasks);
+        setTasks({
+          created: createdRes.data.tasks || [],
+          assigned: assignedRes.data.tasks || [],
+          // overdue: overdueRes.data.tasks || [],
+        });
+      } catch (err) {
+        console.error("Error fetching tasks:", err);
+      }
+    }
+
+    if (user.role === "user") {
+      try {
+        const res = await axios.get(
+          `http://localhost:5000/api/tasks/assigned-tasks?${query}`,
+          { headers }
+        );
+        console.log("Assigned Tasks:", res.data.tasks);
+        setTasks({ created: [], assigned: res.data.tasks || [] });
+      } catch (err) {
+        console.error("Error fetching user tasks:", err);
+      }
     }
   };
 
@@ -81,84 +116,178 @@ const Dashboard = () => {
     fetchTasks(filters);
   };
 
+  const fetchNotifications = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await axios.get("http://localhost:5000/api/notifications", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setNotifications(res.data);
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+    }
+  };
+
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    console.log("Socket ID on frontend:", socket.id);
-    const fetchNotifications = async () => {
+    const fetchUser = async () => {
       try {
-        const res = await axios.get("http://localhost:5000/api/notifications", {
-          headers: { Authorization: `Bearer ${token}` },
+        const token = localStorage.getItem("token");
+        const res = await axios.get("http://localhost:5000/api/auth", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         });
-        setNotifications(res.data);
+        setUser(res.data);
       } catch (err) {
-        console.error("Error fetching notifications:", err);
+        console.error("Failed to fetch user", err);
       }
     };
 
-    const user = JSON.parse(localStorage.getItem("user"));
-    console.log("User ID:", user?.id);
-    console.log("User:", user);
-    if (user.id) {
-      socket.emit("register", user?.id);
-      // console.log("Assigned To:", assignedRes.data.tasks)
+    fetchUser();
+  }, []);
 
-      socket.on("new-notification", (data) => {
-        setNotifications((prev) => [data, ...prev]);
-        setLatestNotification(data);
-        setShowModal(true);
+  useEffect(() => {
+    if (!user) return;
 
-        // Auto-close the modal and reload after 5 seconds
-        setTimeout(() => {
-          setShowModal(false); // Close the modal
-          window.location.reload(); // Reload the page
-        }, 5000);
-      });
+    socketRef.current = io("http://localhost:5000", {
+      transports: ["websocket"],
+    });
 
-      socket.on("new-task", () => {
-        fetchTasks(); // ✅ Correct one from top
-      });
-    }
-    console.log("Socket ID on frontend2:", socket.id);
+    socketRef.current.on("connect", () => {
+      console.log("Socket connected:", socketRef.current.id);
+      socketRef.current.emit("register", user._id);
+    });
 
-    fetchTasks(); // ✅ Call correct version from top
+    socketRef.current.on("new-notification", (data) => {
+      console.log("📢 Notification received:", data);
+      setNotifications((prev) => [data, ...prev]);
+      setLatestNotification(data);
+      setShowModal(true);
+    });
+
+    socketRef.current.on("new-task", () => {
+      fetchTasks();
+    });
+
+    return () => {
+      socketRef.current.disconnect();
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    console.log("User now available:", user);
+
+    fetchTasks();
     fetchNotifications();
+
+    socket.emit("register", user?.id);
+    console.log("Socket ID on frontend:", socket.id);
+
+    socket.on("new-notification", (data) => {
+      console.log("Notification data: ", data);
+      setNotifications((prev) => [data, ...prev]);
+      setLatestNotification(data);
+      setShowModal(true);
+
+      setTimeout(() => {
+        setShowModal(false);
+        window.location.reload();
+      }, 5000);
+    });
+
+    socket.on("new-notification", (data) => {
+      console.log("Notification received:", data); // Debugging line
+      setNotifications((prev) => [data, ...prev]);
+      setLatestNotification(data);
+      setShowModal(true);
+
+      setTimeout(() => {
+        setShowModal(false); // Close the modal
+        window.location.reload(); // Reload the page
+      }, 5000);
+    });
+
+    socket.on("new-task", () => {
+      fetchTasks();
+    });
 
     return () => {
       socket.off("new-task");
       socket.off("new-notification");
       socket.disconnect();
     };
-  }, []);
+  }, [user]);
+
+  useEffect(() => {
+    console.log("User", user);
+    console.log("Tasks after setting state:", tasks); // Debugging line
+  }, [tasks]);
 
   const handleModalClose = () => {
     setShowModal(false);
     window.location.reload(); // Reload the page when modal is closed
+    // fetchTasks()
   };
 
   return (
     <div className="relative p-8 overflow-hidden min-h-screen bg-[#F8EDE3]">
       {/* <Navbar notifications={notifications} /> */}
+      {user && (
+        <div className="text-sm text-right text-[#85586F] font-medium mb-4">
+          Logged in as: <span className="font-bold">{user.name}</span> (
+          {user.role})
+        </div>
+      )}
+      {user && (user.role === "admin" || user.role === "manager") && (
+        <div className="my-6 p-4 border rounded-lg bg-[#DFD3C3] shadow-md">
+          <h2 className="text-lg font-semibold text-[#85586F] mb-2">
+            User Management
+          </h2>
+          <button
+            className="bg-[#C3B091] text-white px-4 py-2 rounded-full hover:bg-[#B89F8A]"
+            onClick={() => router.push("/admin/users")}
+          >
+            Manage Users
+          </button>
+        </div>
+      )}
+
       <FloatingBackground />
+      {console.log("Latest notification:", latestNotification)}
       {showModal && latestNotification && (
+        // console.log("Latest notification:", latestNotification)
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-xl shadow-xl max-w-sm text-center">
             <h3 className="text-lg font-bold text-[#85586F] mb-2">
-            🍫 New Notification
+              🍫 New Notification
             </h3>
             <p className="text-sm text-gray-700">
               {latestNotification.message}
             </p>
             <button
               className="mt-4 px-4 py-2 bg-[#D0B8A8] text-white rounded-full hover:bg-[#C3B091]"
-              onClick={handleModalClose}>
-                Close
+              onClick={handleModalClose}
+            >
+              Close
             </button>
           </div>
         </div>
       )}
       <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
-      <TaskForm onSuccess={fetchTasks} />
+      {user?.role !== "user" && (
+        <button
+          onClick={() => setShowModal(true)}
+          className="your-create-button"
+        >
+          Create Task
+        </button>
+      )}
 
+      {showModal && user?.role !== "user" && (
+        <TaskForm onClose={() => setShowModal(false)} onSuccess={fetchTasks} />
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 mt-3">
         <input
           type="text"
@@ -194,29 +323,45 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {/* Created by You Section */}
-      <h2 className="text-xl mt-6">Created by You</h2>
-      {/* {console.log(tasks.created)} */}
-      {tasks.created.length > 0 ? (
-        <TaskList tasks={tasks.created} onUpdate={fetchTasks} />
-      ) : (
-        <EmptyTaskMessage message="No tasks created yet." />
-      )}
+      {user?.role === "admin" || user?.role === "manager" ? (
+        <>
+          {/* <h2 className="text-xl mt-6">Assigned Tasks</h2>
+          {tasks.assigned.length > 0 ? ( 
+         <TaskList tasks={tasks.assigned} onUpdate={fetchTasks} /> 
+         ) : ( 
+          <EmptyTaskMessage message="You haven't assigned any tasks yet." />
+     )} */}
 
-      {/* Assigned to You Section */}
-      <h2 className="text-xl mt-6">Assigned to You</h2>
-      {tasks.assigned.length > 0 ? (
-        <TaskList tasks={tasks.assigned} onUpdate={fetchTasks} />
-      ) : (
-        <EmptyTaskMessage message="You haven't been assigned any tasks yet." />
-      )}
+          {/* <h2 className="text-xl mt-6 text-red-600">Overdue Tasks</h2>
+          {tasks.overdue.length > 0 ? (
+            <TaskList tasks={tasks.overdue} onUpdate={fetchTasks} />
+          ) : (
+            <EmptyTaskMessage message="No overdue tasks. All are on time" />
+          )} */}
 
-      {/* Overdue Tasks Section */}
-      <h2 className="text-xl mt-6 text-red-600">Overdue Tasks</h2>
-      {tasks.overdue.length > 0 ? (
-        <TaskList tasks={tasks.overdue} onUpdate={fetchTasks} />
+          <h2 className="text-xl mt-6">Created Tasks</h2>
+          {tasks.created.length > 0 ? (
+            <TaskList tasks={tasks.created} onUpdate={fetchTasks} />
+          ) : (
+            <EmptyTaskMessage message="No tasks created yet." />
+          )}
+        </>
       ) : (
-        <EmptyTaskMessage message="No overdue tasks. You're on top of it!" />
+        <>
+          <h2 className="text-xl mt-6">Your Assigned Tasks</h2>
+          {tasks.assigned.length > 0 ? (
+            <TaskList tasks={tasks.assigned} onUpdate={fetchTasks} />
+          ) : (
+            <EmptyTaskMessage message="You haven't been assigned any tasks yet." />
+          )}
+
+          {/* <h2 className="text-xl mt-6 text-red-600">Overdue Tasks</h2>
+          {tasks.overdue.length > 0 ? (
+            <TaskList tasks={tasks.overdue} onUpdate={fetchTasks} />
+          ) : (
+            <EmptyTaskMessage message="No overdue tasks.You are on top of it!" />
+          )} */}
+        </>
       )}
     </div>
   );

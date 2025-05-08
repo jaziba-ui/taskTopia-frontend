@@ -35,7 +35,7 @@ const TaskForm = ({ onSuccess }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setTask({ title: "", description: "", dueDate: "", priority: "Low" });
+      setTask({ title: "", description: "", dueDate: "", priority: "Low", assignedTo: "" });
       onSuccess();
     } catch (error) {
       console.error("Error creating task:", error);
