@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 
-const TaskForm = ({ onSuccess }) => {
+const TaskForm = ({ onClose, onSuccess }) => {
   const [users, setUsers] = useState([]);
   const [task, setTask] = useState({
     title: "",
     description: "",
     dueDate: "",
     priority: "Low",
+    status: "To Do",
     assignedTo: "",
   });
 
@@ -35,8 +36,9 @@ const TaskForm = ({ onSuccess }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      setTask({ title: "", description: "", dueDate: "", priority: "Low", assignedTo: "" });
+      setTask({ title: "", description: "", dueDate: "",status: "To Do", priority: "Low", assignedTo: "" });
       onSuccess();
+      onClose()
     } catch (error) {
       console.error("Error creating task:", error);
       alert("Failed to create task");
@@ -84,6 +86,17 @@ const TaskForm = ({ onSuccess }) => {
         onChange={(e) => setTask({ ...task, dueDate: e.target.value })}
         className="w-full text-[#85586F] border border-[#D0B8A8] rounded px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#D0B8A8] hover:border-[#C3B091] transition"
       />
+      
+      <select
+        value={task.status}
+        onChange={(e) => setTask({ ...task, status: e.target.value })}
+        className="w-full bg-[#F8EDE3] text-[#85586F] border border-[#D0B8A8] rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-[#D0B8A8] hover:border-[#C3B091] transition"
+        >
+        <option>To Do</option>
+        <option>In Progress</option>
+        <option>Verify</option>
+        <option>Completed</option>
+      </select>
 
       <select
         value={task.priority}

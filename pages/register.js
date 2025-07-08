@@ -8,7 +8,7 @@ export default function RegisterPage() {
 
   const handleRegister = async (data) => {
     try {
-      await axiosInstance.post("/auth/register", data); // Use axiosInstance here
+      await axiosInstance.post(`${process.env.NEXT_PUBLIC_API_URL}/auth/register`, data); // Use axiosInstance here
       const res = await axiosInstance.post("/auth/login", {
         email: data.email,
         password: data.password,

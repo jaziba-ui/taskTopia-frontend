@@ -53,7 +53,7 @@ const AdminUsers = () => {
   };
 
   const goToDashboard = () => {
-    router.push('/dashboard'); // Change this path as per your actual dashboard route
+    router.push('/'); // Change this path as per your actual dashboard route
   };
 
   if (loading) return <div className="p-6">Loading users...</div>;
